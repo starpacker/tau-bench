@@ -1,7 +1,8 @@
 # Copyright Sierra
 
 import json
-from litellm import completion
+# from litellm import completion
+from tau_bench.utils import completion
 from typing import List, Optional, Dict, Any
 
 from tau_bench.agents.base import Agent
@@ -14,14 +15,14 @@ class ToolCallingAgent(Agent):
         self,
         tools_info: List[Dict[str, Any]],
         wiki: str,
-        model: str,
-        provider: str,
+        model,
+        tokenizer,
         temperature: float = 0.0,
     ):
         self.tools_info = tools_info
         self.wiki = wiki
         self.model = model
-        self.provider = provider
+        self.tokenizer = tokenizer
         self.temperature = temperature
 
     def solve(
@@ -40,12 +41,14 @@ class ToolCallingAgent(Agent):
             res = completion(
                 messages=messages,
                 model=self.model,
-                custom_llm_provider=self.provider,
+                tokenizer=self.tokenizer,
                 tools=self.tools_info,
                 temperature=self.temperature,
             )
-            next_message = res.choices[0].message.model_dump()
-            total_cost += res._hidden_params["response_cost"]
+            # next_message = res['choices'][0]['message'].model_dump()
+            next_message = res['choices'][0]['message']  # if needed? 
+            total_cost += res['_hidden_params']["response_cost"]
+            # print(next_message)
             action = message_to_action(next_message)
             env_response = env.step(action)
             reward = env_response.reward
@@ -87,7 +90,7 @@ def message_to_action(
         tool_call = message["tool_calls"][0]
         return Action(
             name=tool_call["function"]["name"],
-            kwargs=json.loads(tool_call["function"]["arguments"]),
+            kwargs=tool_call["function"]["arguments"],
         )
     else:
         return Action(name=RESPOND_ACTION_NAME, kwargs={"content": message["content"]})
