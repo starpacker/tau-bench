@@ -9,18 +9,19 @@ import multiprocessing
 from typing import List, Dict, Any
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
+from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
+import torch
 
 from tau_bench.envs import get_env
 from tau_bench.agents.base import Agent
 from tau_bench.types import EnvRunResult, RunConfig
-from litellm import provider_list
+
 from tau_bench.envs.user import UserStrategy
+
 
 
 def run(config: RunConfig) -> List[EnvRunResult]:
     assert config.env in ["retail", "airline"], "Only retail and airline envs are supported"
-    assert config.model_provider in provider_list, "Invalid model provider"
-    assert config.user_model_provider in provider_list, "Invalid user model provider"
     assert config.agent_strategy in ["tool-calling", "act", "react", "few-shot"], "Invalid agent strategy"
     assert config.task_split in ["train", "test", "dev"], "Invalid task split"
     assert config.user_strategy in [item.value for item in UserStrategy], "Invalid user strategy"
@@ -30,6 +31,14 @@ def run(config: RunConfig) -> List[EnvRunResult]:
     ckpt_path = f"{config.log_dir}/{config.agent_strategy}-{config.model.split('/')[-1]}-{config.temperature}_range_{config.start_index}-{config.end_index}_user-{config.user_model}-{config.user_strategy}_{time_str}.json"
     if not os.path.exists(config.log_dir):
         os.makedirs(config.log_dir)
+
+    print("start loading model...")
+    model = config.model
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    agent_tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=True)
+    agent_model = AutoModelForCausalLM.from_pretrained(model, trust_remote_code=True).to(device)
+    agent_model.eval()
+
 
     print(f"Loading user with strategy: {config.user_strategy}")
     env = get_env(
@@ -43,6 +52,8 @@ def run(config: RunConfig) -> List[EnvRunResult]:
         tools_info=env.tools_info,
         wiki=env.wiki,
         config=config,
+        agent_model=agent_model,
+        agent_tokenizer=agent_tokenizer,
     )
     end_index = (
         len(env.tasks) if config.end_index == -1 else min(config.end_index, len(env.tasks))
@@ -122,7 +133,7 @@ def run(config: RunConfig) -> List[EnvRunResult]:
 
 
 def agent_factory(
-    tools_info: List[Dict[str, Any]], wiki, config: RunConfig
+    tools_info: List[Dict[str, Any]], wiki, config: RunConfig, agent_model, agent_tokenizer
 ) -> Agent:
     if config.agent_strategy == "tool-calling":
         # native tool calling
@@ -131,8 +142,8 @@ def agent_factory(
         return ToolCallingAgent(
             tools_info=tools_info,
             wiki=wiki,
-            model=config.model,
-            provider=config.model_provider,
+            model=agent_model,
+            tokenizer=agent_tokenizer,
             temperature=config.temperature,
         )
     elif config.agent_strategy == "act":
