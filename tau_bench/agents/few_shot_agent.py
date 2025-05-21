@@ -2,7 +2,8 @@
 
 import json
 import random
-from litellm import completion
+# from litellm import completion
+from tau_bench.utils import completion
 from typing import List, Optional, Dict, Any
 
 from tau_bench.agents.base import Agent
@@ -15,8 +16,8 @@ class FewShotToolCallingAgent(Agent):
         self,
         tools_info: List[Dict[str, Any]],
         wiki: str,
-        model: str,
-        provider: str,
+        model,
+        tokenizer,
         few_shot_displays: List[str],
         temperature: float = 0.0,
         num_few_shots: int = 5,
@@ -24,7 +25,7 @@ class FewShotToolCallingAgent(Agent):
         self.tools_info = tools_info
         self.wiki = wiki
         self.model = model
-        self.provider = provider
+        self.tokenizer = tokenizer
         if len(few_shot_displays) == 0:
             raise ValueError("Few shot displays are empty")
         elif len(few_shot_displays) < num_few_shots:
@@ -50,12 +51,12 @@ class FewShotToolCallingAgent(Agent):
             res = completion(
                 messages=messages,
                 model=self.model,
-                custom_llm_provider=self.provider,
+                tokenizer=self.tokenizer,
                 tools=self.tools_info,
                 temperature=self.temperature,
             )
-            next_message = res.choices[0].message.model_dump()
-            total_cost += res._hidden_params["response_cost"]
+            next_message = res["choices"][0]["message"]
+            total_cost += res["_hidden_params"]["response_cost"]
             action = message_to_action(next_message)
             env_response = env.step(action)
             reward = env_response.reward
@@ -97,7 +98,7 @@ def message_to_action(
         tool_call = message["tool_calls"][0]
         return Action(
             name=tool_call["function"]["name"],
-            kwargs=json.loads(tool_call["function"]["arguments"]),
+            kwargs=tool_call["function"]["arguments"],
         )
     else:
         return Action(name=RESPOND_ACTION_NAME, kwargs={"content": message["content"]})
