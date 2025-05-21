@@ -24,22 +24,9 @@ model = "/path/to/your/local/model"  # ← 修改为实际模型路径
 ```
 
 ### Run
-
-Run a tool-calling agent on the τ-retail environment:
-
 ```bash
-python run.py --agent-strategy tool-calling --env retail --model gpt-4o --model-provider openai --user-model gpt-4o --user-model-provider openai --user-strategy llm --max-concurrency 10
+python run.py 
 ```
-
-Set max concurrency according to your API limit(s).
-
-To run specific tasks, use the `--task-ids` flag. For example:
-
-```bash
-python run.py --agent-strategy tool-calling --env retail --model gpt-4o --model-provider openai --user-model gpt-4o --user-model-provider openai --user-strategy llm --max-concurrency 10 --task-ids 2 4 6
-```
-
-This command will run only the tasks with IDs 2, 4, and 6.
 
 ## 配置说明
 - `max-concurrency`: 控制最大并发任务数（建议根据GPU显存调整）
