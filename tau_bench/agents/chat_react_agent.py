@@ -1,7 +1,8 @@
 # Copyright Sierra
 
 import json
-from litellm import completion
+# from litellm import completion
+from tau_bench.utils import completion
 
 from tau_bench.agents.base import Agent
 from tau_bench.envs.base import Env
@@ -19,8 +20,8 @@ class ChatReActAgent(Agent):
         self,
         tools_info: List[Dict[str, Any]],
         wiki: str,
-        model: str,
-        provider: str,
+        model,
+        tokenizer,
         use_reasoning: bool = True,
         temperature: float = 0.0,
     ) -> None:
@@ -29,7 +30,7 @@ class ChatReActAgent(Agent):
             wiki + "\n#Available tools\n" + json.dumps(tools_info) + instruction
         )
         self.model = model
-        self.provider = provider
+        self.tokenizer = tokenizer
         self.temperature = temperature
         self.use_reasoning = use_reasoning
         self.tools_info = tools_info
@@ -38,21 +39,22 @@ class ChatReActAgent(Agent):
         self, messages: List[Dict[str, Any]]
     ) -> Tuple[Dict[str, Any], Action, float]:
         res = completion(
-            model=self.model,
-            custom_llm_provider=self.provider,
             messages=messages,
+            model=self.model,
+            tokenizer=self.tokenizer,
             temperature=self.temperature,
         )
-        message = res.choices[0].message
-        action_str = message.content.split("Action:")[-1].strip()
-        try:
-            action_parsed = json.loads(action_str)
-        except json.JSONDecodeError:
-            # this is a hack
-            action_parsed = {
-                "name": RESPOND_ACTION_NAME,
-                "arguments": {RESPOND_ACTION_FIELD_NAME: action_str},
-            }
+        message = res["choices"][0]["message"]
+        action_str = message["content"].split("Action:")[-1].strip()
+        # try:
+        #     action_parsed = json.loads(action_str)
+        # except json.JSONDecodeError:
+        #     # this is a hack
+        #     action_parsed = {
+        #         "name": RESPOND_ACTION_NAME,
+        #         "arguments": {RESPOND_ACTION_FIELD_NAME: action_str},
+        #     }
+        action_parsed = action_str
         assert "name" in action_parsed
         assert "arguments" in action_parsed
         action = Action(name=action_parsed["name"], kwargs=action_parsed["arguments"])
